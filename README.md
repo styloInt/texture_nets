@@ -52,9 +52,16 @@ ln -s `pwd`/train2014 dataset/train/dummy
 
 #### Training a network
 
+Basic usage:
 ```
 th train.lua -data <path to any image dataset>  -style_image path/to/img.jpg
 ```
+
+These parameters work for me: 
+```
+th train.lua -data <path to any image dataset> -style_image path/to/img.jpg -style_size 600 -image_size 512 -model johnson -batch_size 4 -learning_rate 1e-2 -style_weight 10 -style_layers relu1_2,relu2_2,relu3_2,relu4_2 -content_layers relu4_2
+```
+Check out issues tab, you will find some useful advices there. 
 
 To achieve the results from the paper you need to play with `-image_size`, `-style_size`, `-style_layers`, `-content_layers`, `-style_weight`, `-tv_weight`. 
 
@@ -63,12 +70,12 @@ Do not hesitate to set `-batch_size` to one, but remember the larger `-batch_siz
 ### Testing
 
 ```
-th test.lua -input_image path/to/image.jpg -model data/checkpoints/model.t7
+th test.lua -input_image path/to/image.jpg -model_t7 data/checkpoints/model.t7
 ```
 
 Play with `-image_size` here. Raise `-cpu` flag to use CPU for processing. 
 
-You can find a **pretrained model** [here](https://transfer.sh/KtbI5/model.t7). It is *not* the model from the paper.
+You can find a **pretrained model** [here](https://yadi.sk/d/GwL9jNJovBwQg). It is *not* the model from the paper.
 
 ## Generating textures
 
