@@ -56,7 +56,7 @@ function InstanceNormalization:updateOutput(input)
       self.bn.bias:copy(self.bias:repeatTensor(batch_size))
    end
 
-   local input_1obj = input:view(1,input:size(1)*input:size(2),input:size(3),input:size(4))
+   local input_1obj = input:contiguous():view(1,input:size(1)*input:size(2),input:size(3),input:size(4))
    self.output = self.bn:forward(input_1obj):viewAs(input)
    
    return self.output
@@ -67,8 +67,8 @@ function InstanceNormalization:updateGradInput(input, gradOutput)
 
    assert(self.bn)
 
-   local input_1obj = input:view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
-   local gradOutput_1obj = gradOutput:view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
+   local input_1obj = input:contiguous():view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
+   local gradOutput_1obj = gradOutput:contiguous():view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
    
    if self.affine then
       self.bn.gradWeight:zero()
