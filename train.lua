@@ -196,6 +196,7 @@ for it = 1, params.num_iterations do
 
   -- Dump net
   if it%params.save_every == 0 or it == params.num_iterations then 
+    net:clearState()
     local net_to_save = deepCopy(net):float():clearState()
     if params.backend == 'cudnn' then
       net_to_save = cudnn.convert(net_to_save, nn)
