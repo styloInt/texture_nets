@@ -1,8 +1,10 @@
 # Texture Networks + Instance normalization: Feed-forward Synthesis of Textures and Stylized Images
 
-In the paper [Texture Networks: Feed-forward Synthesis of Textures and Stylized Images](http://arxiv.org/abs/1603.03417) we describe a faster way to generate textures and stylize images. It requires learning a feedforward generator with a loss function proposed by [Gatys et. al.](http://arxiv.org/abs/1505.07376). When the model is trained, a texture sample or stylized image of any size can be generated instantly.
+In the paper [Texture Networks: Feed-forward Synthesis of Textures and Stylized Images](http://arxiv.org/abs/1603.03417) we describe a faster way to generate textures and stylize images. It requires learning a feedforward generator with a loss function proposed by [Gatys et al.](http://arxiv.org/abs/1505.07376). When the model is trained, a texture sample or stylized image of any size can be generated instantly.
 
-[Instance Normalization: The Missing Ingredient for Fast Stylization](https://arxiv.org/abs/1607.08022) presents a better architectural design for the generator network. By switching `batch_norm` to `instance norm` we facilitate the learning process resulting in much better quality.
+[Improved Texture Networks: Maximizing Quality and Diversity in Feed-forward Stylization and Texture Synthesis](https://arxiv.org/abs/1701.02096) presents a better architectural design for the generator network. By switching `batch_norm` to `Instance Norm` we facilitate the learning process resulting in much better quality.
+
+
 
 This also implements the stylization part from [Perceptual Losses for Real-Time Style Transfer and Super-Resolution](https://arxiv.org/abs/1603.08155).
 
