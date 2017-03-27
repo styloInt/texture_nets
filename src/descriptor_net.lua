@@ -70,6 +70,8 @@ function create_descriptor_net(params)
   local texture_image = image.load(params.texture, 3)
   if params.style_size > 0 then 
     texture_image = image.scale(texture_image, params.style_size, 'bicubic'):float()
+  else
+    texture_image = texture_image:float()
   end
   local texture_image = preprocess(texture_image):type(dtype):add_dummy()
 

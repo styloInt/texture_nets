@@ -55,6 +55,9 @@ cmd:option('-manualSeed', 0)
 cmd:option('-nThreads', 4, 'Data loading threads.')
 
 cmd:option('-cpu', false, 'use this flag to run on CPU')
+cmd:option('-gpu', 0, 'specify which GPU to use')
+
+cmd:option('-display_port', 8000, 'specify port to show graphs')
 
 params = cmd:parse(arg)
 
@@ -67,6 +70,8 @@ else
 
   require 'cutorch'
   require 'cunn'
+
+  cutorch.setDevice(params.gpu)
 
   torch.CudaTensor.add_dummy = torch.FloatTensor.add_dummy
   
@@ -81,6 +86,10 @@ else
 
 end
 assert(params.mode == 'style', 'Only stylization is implemented in master branch. You can find texture generation in texture_nets_v1 branch.')
+
+if use_display then
+  display.configure({port=params.display_port})
+end
 
 params.normalize_gradients = params.normalize_gradients ~= 'false'
 params.vgg_no_pad = params.vgg_no_pad ~= 'false'
