@@ -63,8 +63,7 @@ end
 
 
 function create_descriptor_net(params)
-
-  local cnn = loadcaffe.load(params.proto_file, params.model_file, params.backend):type(dtype)
+  local cnn = loadcaffe.load(params.proto_file, params.model_file, 'nn'):float();
 
   -- load texture
   local texture_image = image.load(params.texture, 3)
@@ -73,7 +72,7 @@ function create_descriptor_net(params)
   else
     texture_image = texture_image:float()
   end
-  local texture_image = preprocess(texture_image):type(dtype):add_dummy()
+  local texture_image = preprocess(texture_image):add_dummy()
 
   local content_layers = params.content_layers:split(",") 
   local texture_layers  = params.texture_layers:split(",")
@@ -105,9 +104,9 @@ function create_descriptor_net(params)
         print("Setting up content layer", i, ":", layer.name)
 
         local norm = false
-        local loss_module = nn.ContentLoss(params.content_weight, norm):type(dtype)
+        local loss_module = nn.ContentLoss(params.content_weight, norm);
         net:add(loss_module)
-        table.insert(content_modules, loss_module)
+        loss_module.tag = 'content'
         next_content_idx = next_content_idx + 1
       end
       ---------------------------------
@@ -115,25 +114,25 @@ function create_descriptor_net(params)
       ---------------------------------
       if name == texture_layers[next_texture_idx] then
         print("Setting up texture layer  ", i, ":", layer.name)
-        local gram = GramMatrix():type(dtype)
+        local gram = GramMatrix():float();
 
         local target_features = net:forward(texture_image):clone()
-        local target = gram:forward(nn.View(-1):type(dtype):setNumInputDims(2):forward(target_features[1])):clone()
+        local target = gram:forward(nn.View(-1):float():setNumInputDims(2):forward(target_features[1])):clone()
 
         target:div(target_features[1]:nElement())
 
         local norm = params.normalize_gradients
-        local loss_module = nn.TextureLoss(params.texture_weight, target, norm):type(dtype)
+        local loss_module = nn.TextureLoss(params.texture_weight, target, norm):float();
         
         net:add(loss_module)
-        table.insert(texture_modules, loss_module)
+        loss_module.tag = 'texture';
         next_texture_idx = next_texture_idx + 1
       end
     end
   end
 
   net:add(nn.DummyGradOutput())
-
+  
   -- We don't need the base CNN anymore, so clean it up to save memory.
   cnn = nil
   for i=1,#net.modules do
@@ -143,7 +142,17 @@ function create_descriptor_net(params)
         module.gradBias = nil
     end
   end
-  collectgarbage()
+
+  net = cudnn.convert(net, cudnn):cuda();
+  for key,module in pairs(net.modules) do
+    if module.tag == 'content' then
+      module.target:cuda();
+      table.insert(content_modules, module)
+    elseif module.tag == 'texture' then
+      module.target:cuda();
+      table.insert(texture_modules, module)
+    end
+  end
       
   return net, content_modules, texture_modules
 end
