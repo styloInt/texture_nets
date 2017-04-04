@@ -1,0 +1,16 @@
+deploy:
+  image:
+    name: riseml/torch:latest
+    install:
+    - luarocks install riseml
+    - wget -O model.t7 -nc 'https://github.com/riseml/texture_nets/releases/download/1.0/model.t7'
+  run:
+    - th demo.lua -model model.t7
+  gpu: yes
+  input:
+    image: image/jpeg
+  output:
+    image: image/jpeg
+  demo:
+    description: Demo for the implementation of 'Texture Networks Feed-forward Synthesis of Textures and Stylized Images'.
+    title: Texture Networks Demo
