@@ -14,3 +14,7 @@ deploy:
   demo:
     description: Demo for the implementation of 'Texture Networks Feed-forward Synthesis of Textures and Stylized Images'.
     title: Texture Networks Demo
+    readme:
+      content: |
+         # Texture Networks + Instance normalization: Feed-forward Synthesis of Textures and Stylized Images
+         More information can be found at the [GitHub repository](https://github.com/DmitryUlyanov/texture_nets)
