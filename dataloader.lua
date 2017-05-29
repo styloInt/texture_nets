@@ -79,7 +79,7 @@ function DataLoader:run()
    local idx, sample = 1, nil
    local function enqueue()
       while idx <= size and threads:acceptsjob() do
-         local indices = torch.Tensor(batchSize):random(size)
+         local indices = torch.FloatTensor(batchSize):random(size)
          threads:addjob(
             function(indices, nCrops)
                
