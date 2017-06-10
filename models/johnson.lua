@@ -33,13 +33,13 @@ model:add(backend.SpatialConvolution(3, 32, 9, 9, 1, 1, 0, 0))
 model:add(normalization(32))
 model:add(nn.ReLU(true))
 
--- probably need replication padding here too
-model:add(backend.SpatialConvolution(32, 64,  3, 3, 2, 2, 1, 1))
+model:add(pad(1, 1, 1, 1))
+model:add(backend.SpatialConvolution(32, 64,  3, 3, 2, 2, 0, 0))
 model:add(normalization(64))
 model:add(nn.ReLU(true))
 
--- probably need replication padding here too
-model:add(backend.SpatialConvolution(64, 128, 3, 3, 2, 2, 1, 1))
+model:add(pad(1, 1, 1, 1))
+model:add(backend.SpatialConvolution(64, 128, 3, 3, 2, 2, 0, 0))
 model:add(normalization(128))
 model:add(nn.ReLU(true))
 

@@ -2,15 +2,37 @@ require 'torch'
 require 'nn'
 require 'image'
 require 'optim'
+require 'cudnn'
 
 require 'src/utils'
 require 'src/descriptor_net'
+require 'src/preprocess_criterion'
 
 local DataLoader = require 'dataloader'
 
 use_display, display = pcall(require, 'display')
 if not use_display then 
   print('torch.display not found. unable to plot') 
+end
+
+function nn.MultiCriterion:replace(f)
+  for i=1,#self.criterions do
+    self.criterions[i] = self.criterions[i]:replace(f)
+  end
+  return self
+end
+
+function printCriterion(criterion)
+  if (type(criterion) == 'nn.MultiCriterion') then
+    for i=1,#self.criterions do
+      printCriterion(self.criterions[i])
+    end
+  elseif (type(criterion) == 'nn.PreprocessCriterion') then
+    print(criterion.preprocessing)
+    print(criterion.criterion)
+  else
+    print(criterion)
+  end
 end
 
 ----------------------------------------------------------
@@ -55,6 +77,11 @@ cmd:option('-manualSeed', 0)
 cmd:option('-nThreads', 4, 'Data loading threads.')
 
 cmd:option('-cpu', false, 'use this flag to run on CPU')
+cmd:option('-gpu', 0, 'specify which GPU to use')
+
+cmd:option('-display_port', 8000, 'specify port to show graphs')
+cmd:option('-pyramid_loss', 1, 'number of pyramidal downscales in the loss function')
+cmd:option('-pyramid_decay', 0.9, 'weight decay of pyramidal downscales in the loss function')
 
 params = cmd:parse(arg)
 
@@ -68,10 +95,11 @@ else
   require 'cutorch'
   require 'cunn'
 
+  cutorch.setDevice(params.gpu)
+
   torch.CudaTensor.add_dummy = torch.FloatTensor.add_dummy
   
   if params.backend == 'cudnn' then
-    require 'cudnn'
     cudnn.fastest = true
     cudnn.benchmark = true
     backend = cudnn
@@ -81,6 +109,10 @@ else
 
 end
 assert(params.mode == 'style', 'Only stylization is implemented in master branch. You can find texture generation in texture_nets_v1 branch.')
+
+if use_display then
+  display.configure({port=params.display_port})
+end
 
 params.normalize_gradients = params.normalize_gradients ~= 'false'
 params.vgg_no_pad = params.vgg_no_pad ~= 'false'
@@ -110,9 +142,43 @@ end
 
 trainLoader, valLoader = DataLoader.create(params)
 
+-- load network
+local cnn = loadcaffe.load(params.proto_file, params.model_file, 'nn')
+cnn = cudnn.convert(cnn, nn):float()
+
+-- load texture
+local texture_image = image.load(params.texture, 3)
+if params.style_size > 0 then
+  texture_image = image.scale(texture_image, params.style_size, 'bicubic')
+end
+texture_image = texture_image:float()
+
+local texture_image = preprocess(texture_image)
+
 -- Define model
 local net = require('models/' .. params.model):type(dtype)
-local criterion = nn.ArtisticCriterion(params)
+
+local criterion = nil
+if params.pyramid_loss > 1 then
+   criterion = nn.MultiCriterion()
+   local w = 1.0
+   local s = 1.0
+   criterion:add(nn.ArtisticCriterion(params, cnn:clone(), texture_image:clone()), w)
+   for i = 2,params.pyramid_loss do
+      w = w * params.pyramid_decay
+      s = s * 2
+      local local_texture_image = image.scale(texture_image, texture_image:size(3)/s, texture_image:size(2)/s, 'bicubic'):float()
+      criterion:add(nn.PreprocessCriterion(nn.ArtisticCriterion(params, cnn:clone(), local_texture_image:clone()), nn.SpatialAveragePooling(s, s, s, s)), w)
+   end
+else
+   criterion = nn.ArtisticCriterion(params, cnn, texture_image)
+end
+
+if not params.cpu then
+  criterion = cudnn.convert(criterion, cudnn):cuda()
+  printCriterion(criterion)
+  --criterion:cuda():type(dtype)
+end
 
 ----------------------------------------------------------
 -- feval
@@ -142,11 +208,11 @@ function feval(x)
 
   -- Forward
   local out = net:forward(images_input)
-  loss = loss + criterion:forward({out, images_target})
+  loss = loss + criterion:forward(out, images_target)
   
   -- Backward
-  local grad = criterion:backward({out, images_target}, nil)
-  net:backward(images_input, grad[1])
+  local grad = criterion:backward(out, images_target)
+  net:backward(images_input, grad)
 
   loss = loss/params.batch_size
   
