@@ -8,6 +8,7 @@ In the paper [Texture Networks: Feed-forward Synthesis of Textures and Stylized 
 
 This also implements the stylization part from [Perceptual Losses for Real-Time Style Transfer and Super-Resolution](https://arxiv.org/abs/1603.08155).
 
+You can find an oline demo [here](https://riseml.com/DmitryUlyanov/texture_nets) (thanks to RiseML). 
 # Prerequisites
 - [Torch7](http://torch.ch/docs/getting-started.html) + [loadcaffe](https://github.com/szagoruyko/loadcaffe)
 - cudnn + torch.cudnn (optionally)
