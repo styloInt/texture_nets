@@ -37,15 +37,15 @@ end
 function M.Scale(size, interpolation)
    interpolation = interpolation or 'bicubic'
    return function(input)
-      local w, h = input:size(3), input:size(2)
-      if (w <= h and w == size) or (h <= w and h == size) then
-         return input
-      end
-      if w < h then
-         return image.scale(input, size, h/w * size, interpolation)
-      else
-         return image.scale(input, w/h * size, size, interpolation)
-      end
+      -- local w, h = input:size(3), input:size(2)
+      -- if (w <= h and w == size) or (h <= w and h == size) then
+      --    return input
+      -- end
+      -- if w < h then
+         return image.scale(input, size,  size, interpolation)
+      -- else
+      --    return image.scale(input,  size, size, interpolation)
+      -- end
    end
 end
 

@@ -20,6 +20,7 @@ local ImagenetDataset = torch.class('resnet.ImagenetDataset', M)
 function ImagenetDataset:__init(imageInfo, opt, split)
    self.imageInfo = imageInfo[split]
    self.opt = opt
+   self.add_noise = opt.add_noise
    self.split = split
    self.dir = paths.concat(opt.data, split)
    self.image_size = opt.image_size
@@ -80,11 +81,13 @@ local meanstd = {
 function ImagenetDataset:preprocess()
    if self.split == 'train' then
       return t.Compose{
-        t.RandomCrop(self.image_size),
+        t.Scale(self.image_size),
+        -- t.RandomCrop(self.image_size),
       }
    elseif self.split == 'val' then
       return t.Compose{
-        t.RandomCrop(self.image_size),
+        t.Scale(self.image_size),
+        -- t.RandomCrop(self.image_size),
       }
    else
       error('invalid split: ' .. self.split)
@@ -94,10 +97,19 @@ end
 function ImagenetDataset:get_input_target()
 
   return function(img)
+
+  if self.add_noise then
+    local img_noise = torch.cat({img, img:clone():uniform()}, 1)
+    return {
+        input = img_noise,
+        target = img,
+    }
+  else
     return {
         input = img,
         target = img,
     }
+  end
   end
 end
 

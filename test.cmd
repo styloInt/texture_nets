@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0 th test.lua -input_image ~/data/MSCOCO/dataset/val/1/COCO_val2014_000000000042.jpg -model_t7 data/checkpoints/.jpg/johnson_small/true/model_25000.t7 -save_path stylized.jpg

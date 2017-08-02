@@ -2,37 +2,17 @@ require 'torch'
 require 'nn'
 require 'image'
 require 'optim'
-require 'cudnn'
+require 'mynn'
+require 'paths'
 
 require 'src/utils'
 require 'src/descriptor_net'
-require 'src/preprocess_criterion'
 
 local DataLoader = require 'dataloader'
 
 use_display, display = pcall(require, 'display')
 if not use_display then 
   print('torch.display not found. unable to plot') 
-end
-
-function nn.MultiCriterion:replace(f)
-  for i=1,#self.criterions do
-    self.criterions[i] = self.criterions[i]:replace(f)
-  end
-  return self
-end
-
-function printCriterion(criterion)
-  if (type(criterion) == 'nn.MultiCriterion') then
-    for i=1,#self.criterions do
-      printCriterion(self.criterions[i])
-    end
-  elseif (type(criterion) == 'nn.PreprocessCriterion') then
-    print(criterion.preprocessing)
-    print(criterion.criterion)
-  else
-    print(criterion)
-  end
 end
 
 ----------------------------------------------------------
@@ -77,14 +57,18 @@ cmd:option('-manualSeed', 0)
 cmd:option('-nThreads', 4, 'Data loading threads.')
 
 cmd:option('-cpu', false, 'use this flag to run on CPU')
-cmd:option('-gpu', 0, 'specify which GPU to use')
-
-cmd:option('-display_port', 8000, 'specify port to show graphs')
-cmd:option('-pyramid_loss', 1, 'number of pyramidal downscales in the loss function')
-cmd:option('-pyramid_decay', 0.9, 'weight decay of pyramidal downscales in the loss function')
+cmd:option('-add_noise', false)
+cmd:option('-display_port', 8000)
+cmd:option('-pairwise_loss', 'false')
+cmd:option('-pairwise_weight', 10000)
 
 params = cmd:parse(arg)
 
+display.configure({port=params.display_port})
+params.checkpoints_path = params.checkpoints_path .. '/' .. paths.basename(params.style_image) .. '/' .. params.model .. '/' .. params.pairwise_loss .. '/'
+paths.mkdir(params.checkpoints_path)
+
+params.pairwise_loss = params.pairwise_loss ~= 'false'
 if params.cpu then
   dtype = 'torch.FloatTensor'
   params.backend = 'nn'
@@ -95,11 +79,10 @@ else
   require 'cutorch'
   require 'cunn'
 
-  cutorch.setDevice(params.gpu)
-
   torch.CudaTensor.add_dummy = torch.FloatTensor.add_dummy
   
   if params.backend == 'cudnn' then
+    require 'cudnn'
     cudnn.fastest = true
     cudnn.benchmark = true
     backend = cudnn
@@ -108,11 +91,8 @@ else
   end
 
 end
+require 'EstimatedEntropyMaximizer'
 assert(params.mode == 'style', 'Only stylization is implemented in master branch. You can find texture generation in texture_nets_v1 branch.')
-
-if use_display then
-  display.configure({port=params.display_port})
-end
 
 params.normalize_gradients = params.normalize_gradients ~= 'false'
 params.vgg_no_pad = params.vgg_no_pad ~= 'false'
@@ -124,7 +104,7 @@ params.texture_layers = params.style_layers
 params.texture = params.style_image
 
 if params.normalization == 'instance' then
-  require 'InstanceNormalization'
+  -- require 'InstanceNormalization'
   normalization = nn.InstanceNormalization
 elseif params.normalization == 'batch' then
   normalization = nn.SpatialBatchNormalization
@@ -142,44 +122,10 @@ end
 
 trainLoader, valLoader = DataLoader.create(params)
 
--- load network
-local cnn = loadcaffe.load(params.proto_file, params.model_file, 'nn')
-cnn = cudnn.convert(cnn, nn):float()
-
--- load texture
-local texture_image = image.load(params.texture, 3)
-if params.style_size > 0 then
-  texture_image = image.scale(texture_image, params.style_size, 'bicubic')
-end
-texture_image = texture_image:float()
-
-local texture_image = preprocess(texture_image)
-
 -- Define model
 local net = require('models/' .. params.model):type(dtype)
-
-local criterion = nil
-if params.pyramid_loss > 1 then
-   criterion = nn.MultiCriterion()
-   local w = 1.0
-   local s = 1.0
-   criterion:add(nn.ArtisticCriterion(params, cnn:clone(), texture_image:clone()), w)
-   for i = 2,params.pyramid_loss do
-      w = w * params.pyramid_decay
-      s = s * 2
-      local local_texture_image = image.scale(texture_image, texture_image:size(3)/s, texture_image:size(2)/s, 'bicubic'):float()
-      criterion:add(nn.PreprocessCriterion(nn.ArtisticCriterion(params, cnn:clone(), local_texture_image:clone()), nn.SpatialAveragePooling(s, s, s, s)), w)
-   end
-else
-   criterion = nn.ArtisticCriterion(params, cnn, texture_image)
-end
-
-if not params.cpu then
-  criterion = cudnn.convert(criterion, cudnn):cuda()
-  printCriterion(criterion)
-  --criterion:cuda():type(dtype)
-end
-
+local criterion = nn.ArtisticCriterion(params)
+local ent_estimator = nn.EstimatedEntropyMaximizer():cuda()
 ----------------------------------------------------------
 -- feval
 ----------------------------------------------------------
@@ -208,16 +154,29 @@ function feval(x)
 
   -- Forward
   local out = net:forward(images_input)
-  loss = loss + criterion:forward(out, images_target)
+  loss = loss + criterion:forward({out, images_target})
   
-  -- Backward
-  local grad = criterion:backward(out, images_target)
-  net:backward(images_input, grad)
+  local ent_loss = 0
+  if params.pairwise_loss then
+    ent_loss = ent_estimator:forward(out)
+  end
 
-  loss = loss/params.batch_size
+  -- Backward
+  local grad = criterion:backward({out, images_target}, nil)
   
+  if params.pairwise_loss then 
+    -- print(torch.norm(ent_estimator:backward(out)), torch.norm(grad[1]))
+    net:backward(images_input, grad[1] + params.pairwise_weight*ent_estimator:backward(out))
+  else
+    net:backward(images_input, grad[1])
+  end
+
+  loss = loss
+  
+
   table.insert(loss_history, {iteration,loss})
-  print('#it: ', iteration, 'loss: ', loss)
+  print('#it: ', iteration, 'loss: ', loss, 'entropy: ', ent_loss)
+  collectgarbage()
   return loss, gradParameters
 end
 
@@ -262,7 +221,6 @@ for it = 1, params.num_iterations do
 
   -- Dump net
   if it%params.save_every == 0 or it == params.num_iterations then 
-    net:clearState()
     local net_to_save = deepCopy(net):float():clearState()
     if params.backend == 'cudnn' then
       net_to_save = cudnn.convert(net_to_save, nn)

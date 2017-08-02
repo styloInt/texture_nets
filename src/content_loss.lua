@@ -3,7 +3,7 @@ local ContentLoss, parent = torch.class('nn.ContentLoss', 'nn.Module')
 function ContentLoss:__init(strength, normalize)
   parent.__init(self)
   self.strength = strength
-  self.target = torch.FloatTensor()
+  self.target = torch.Tensor()
   self.normalize = normalize or false
   self.loss = 0
   self.crit = nn.MSECriterion()

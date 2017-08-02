@@ -79,22 +79,26 @@ function DataLoader:run()
    local idx, sample = 1, nil
    local function enqueue()
       while idx <= size and threads:acceptsjob() do
-         local indices = torch.FloatTensor(batchSize):random(size)
+         local indices = torch.Tensor(batchSize):random(size)
+         indices:fill(indices[1])
+
          threads:addjob(
             function(indices, nCrops)
                
                local sz = indices:size(1)
                local batch_input, batch_target, imageSize
                
-               for i, idx in ipairs(indices:totable()) do
-
+               for i= 1, indices:size(1) do
+                  idx = indices[i]
                   -- if it's too small reject
                   local out = _G.dataset:get(idx)
                   
                   if not out then 
                      while true do
-                        out = _G.dataset:get(torch.random(size))
+                        local idx1 = torch.random(size)
+                        out = _G.dataset:get(idx1)
                         if out then 
+                           indices:fill(idx1)
                            break
                         end
                      end
@@ -130,7 +134,7 @@ function DataLoader:run()
             indices,
             self.nCrops
          )
-         idx = idx + batchSize
+         idx = idx + 1--batchSize
       end
    end
 

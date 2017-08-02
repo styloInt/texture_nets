@@ -1,6 +1,5 @@
 require 'nn'
 require 'loadcaffe'
-require 'src/SpatialCircularPadding'
 
 ----------------------------------------------------------
 -- Shortcuts 
@@ -197,41 +196,105 @@ function deprocess(img)
 end
 
 -----Almost copy paste of jcjohnson's code -----------
-local TVLoss, parent = torch.class('nn.TVLoss', 'nn.Module')
+-- local TVLoss, parent = torch.class('nn.TVLoss', 'nn.Module')
 
-function TVLoss:__init(strength)
-  parent.__init(self)
-  print('Using TV loss with weight ', strength)
-  self.strength = strength
-  self.x_diff = torch.Tensor()
-  self.y_diff = torch.Tensor()
-end
+-- function TVLoss:__init(strength)
+--   parent.__init(self)
+--   print('Using TV loss with weight ', strength)
+--   self.strength = strength
+--   self.x_diff = torch.Tensor()
+--   self.y_diff = torch.Tensor()
+-- end
 
-function TVLoss:updateOutput(input)
-  self.output = input
-  return self.output
-end
+-- function TVLoss:updateOutput(input)
+--   self.output = input
+--   return self.output
+-- end
 
--- TV loss backward pass inspired by kaishengtai/neuralart
-function TVLoss:updateGradInput(input, gradOutput)
-  self.gradInput:resizeAs(input):zero()
+-- -- TV loss backward pass inspired by kaishengtai/neuralart
+-- function TVLoss:updateGradInput(input, gradOutput)
+--   self.gradInput:resizeAs(input):zero()
   
-  for obj = 1, input:size(1) do
-    local input_= input[obj]
-    local C, H, W = input_:size(1), input_:size(2), input_:size(3)
-    self.x_diff:resize(3, H - 1, W - 1)
-    self.y_diff:resize(3, H - 1, W - 1)
-    self.x_diff:copy(input_[{{}, {1, -2}, {1, -2}}])
-    self.x_diff:add(-1, input_[{{}, {1, -2}, {2, -1}}])
-    self.y_diff:copy(input_[{{}, {1, -2}, {1, -2}}])
-    self.y_diff:add(-1, input_[{{}, {2, -1}, {1, -2}}])
-    self.gradInput[obj][{{}, {1, -2}, {1, -2}}]:add(self.x_diff):add(self.y_diff)
-    self.gradInput[obj][{{}, {1, -2}, {2, -1}}]:add(-1, self.x_diff)
-    self.gradInput[obj][{{}, {2, -1}, {1, -2}}]:add(-1, self.y_diff)
+--   for obj = 1, input:size(1) do
+--     local input_= input[obj]
+--     local C, H, W = input_:size(1), input_:size(2), input_:size(3)
+--     self.x_diff:resize(3, H - 1, W - 1)
+--     self.y_diff:resize(3, H - 1, W - 1)
+--     self.x_diff:copy(input_[{{}, {1, -2}, {1, -2}}])
+--     self.x_diff:add(-1, input_[{{}, {1, -2}, {2, -1}}])
+--     self.y_diff:copy(input_[{{}, {1, -2}, {1, -2}}])
+--     self.y_diff:add(-1, input_[{{}, {2, -1}, {1, -2}}])
+--     self.gradInput[obj][{{}, {1, -2}, {1, -2}}]:add(self.x_diff):add(self.y_diff)
+--     self.gradInput[obj][{{}, {1, -2}, {2, -1}}]:add(-1, self.x_diff)
+--     self.gradInput[obj][{{}, {2, -1}, {1, -2}}]:add(-1, self.y_diff)
+--   end
+
+--   self.gradInput:mul(self.strength)
+--   self.gradInput:add(gradOutput)
+
+--   return self.gradInput
+-- end
+local SubExpand, parent = torch.class('nn.SubExpand', 'nn.Module')
+
+function SubExpand:__init(t, inplace)
+  parent.__init(self)
+  self.t = t 
+  self.inplace = inplace or false
+end
+
+function SubExpand:updateOutput(input)
+  self.t1 = self.t:expandAs(input)
+
+  if self.inplace then
+    self.output = input
+
+    torch.csub(self.output, input, self.t1)
+  else
+    self.output = self.output or input.new()
+    self.output:resizeAs(input)  
+
+    self.output:copy(input)
+    self.output:csub(self.t1)
   end
 
-  self.gradInput:mul(self.strength)
-  self.gradInput:add(gradOutput)
 
+  
+  return self.output
+end 
+
+function SubExpand:updateGradInput(input, gradOutput)
+   self.gradInput = gradOutput
   return self.gradInput
+end
+
+
+local IndexInit, parent = torch.class('nn.IndexInit', 'nn.Module')
+
+function IndexInit:__init(dimension, index)
+    parent.__init(self)
+    self.dimension = dimension
+    self.index = index
+    self.gradInput = torch.Tensor()
+end
+
+function IndexInit:updateOutput(input)
+    self.output:index(input, self.dimension, self.index)
+    return self.output
+end
+
+function IndexInit:updateGradInput(input, gradOutput)
+    self.gradInput:resizeAs(input)
+    self.gradInput:indexCopy(self.dimension, self.index, gradOutput)
+    return self.gradInput
+end
+
+function get_preprocess_module()
+  local mean_pixel = torch.DoubleTensor({103.939, 116.779, 123.68})
+  mean_pixel = mean_pixel:view(1, 3, 1, 1)
+
+  local net = nn.Sequential()
+  net:add(nn.IndexInit(2,torch.LongTensor{3, 2, 1}))
+  net:add(nn.MulConstant(255.0))
+  net:add(nn.SubExpand(mean_pixel))
+  return net
 end

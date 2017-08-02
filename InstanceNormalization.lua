@@ -1,9 +1,3 @@
-require 'nn'
-
-_ = [[
-   An implementation for https://arxiv.org/abs/1607.08022
-]]
-
 local InstanceNormalization, parent = torch.class('nn.InstanceNormalization', 'nn.Module')
 
 function InstanceNormalization:__init(nOutput, eps, momentum, affine)
@@ -12,7 +6,7 @@ function InstanceNormalization:__init(nOutput, eps, momentum, affine)
    self.running_var = torch.ones(nOutput)
 
    self.eps = eps or 1e-5
-   self.momentum = momentum or 0.0
+   self.momentum = momentum or 0.1
    if affine ~= nil then
       assert(type(affine) == 'boolean', 'affine has to be true/false')
       self.affine = affine
@@ -25,10 +19,17 @@ function InstanceNormalization:__init(nOutput, eps, momentum, affine)
 
    if self.affine then 
       self.weight = torch.Tensor(nOutput):uniform()
-      self.bias = torch.Tensor(nOutput):zero()
+      self.bias = torch.Tensor(nOutput):uniform():div(10):zero()
       self.gradWeight = torch.Tensor(nOutput)
       self.gradBias = torch.Tensor(nOutput)
    end 
+end
+
+function InstanceNormalization:initFromBN(bn)
+   self.weight:copy(bn.weight)
+   self.bias:copy(bn.bias)
+   self.running_mean:copy(bn.running_mean)
+   self.running_var:copy(bn.running_var)
 end
 
 function InstanceNormalization:updateOutput(input)
@@ -56,9 +57,9 @@ function InstanceNormalization:updateOutput(input)
       self.bn.bias:copy(self.bias:repeatTensor(batch_size))
    end
 
-   local input_1obj = input:contiguous():view(1,input:size(1)*input:size(2),input:size(3),input:size(4))
+   local input_1obj = input:view(1,input:size(1)*input:size(2),input:size(3),input:size(4))
    self.output = self.bn:forward(input_1obj):viewAs(input)
-   
+
    return self.output
 end
 
@@ -67,9 +68,9 @@ function InstanceNormalization:updateGradInput(input, gradOutput)
 
    assert(self.bn)
 
-   local input_1obj = input:contiguous():view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
+   local input_1obj = input:view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
    local gradOutput_1obj = gradOutput:contiguous():view(1,input:size(1)*input:size(2),input:size(3),input:size(4)) 
-   
+      
    if self.affine then
       self.bn.gradWeight:zero()
       self.bn.gradBias:zero()
@@ -89,10 +90,4 @@ function InstanceNormalization:clearState()
    self.gradInput = self.gradInput.new()
    
    self.bn:clearState()
-end
-
-function InstanceNormalization:evaluate()
-end
-
-function InstanceNormalization:training()
 end
