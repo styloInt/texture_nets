@@ -216,19 +216,16 @@ end
 function TVLoss:updateGradInput(input, gradOutput)
   self.gradInput:resizeAs(input):zero()
   
-  for obj = 1, input:size(1) do
-    local input_= input[obj]
-    local C, H, W = input_:size(1), input_:size(2), input_:size(3)
-    self.x_diff:resize(3, H - 1, W - 1)
-    self.y_diff:resize(3, H - 1, W - 1)
-    self.x_diff:copy(input_[{{}, {1, -2}, {1, -2}}])
-    self.x_diff:add(-1, input_[{{}, {1, -2}, {2, -1}}])
-    self.y_diff:copy(input_[{{}, {1, -2}, {1, -2}}])
-    self.y_diff:add(-1, input_[{{}, {2, -1}, {1, -2}}])
-    self.gradInput[obj][{{}, {1, -2}, {1, -2}}]:add(self.x_diff):add(self.y_diff)
-    self.gradInput[obj][{{}, {1, -2}, {2, -1}}]:add(-1, self.x_diff)
-    self.gradInput[obj][{{}, {2, -1}, {1, -2}}]:add(-1, self.y_diff)
-  end
+  local N, C, H, W = input:size(1), input:size(2), input:size(3), input:size(4)
+  self.x_diff:resize(N, C, H - 1, W - 1)
+  self.y_diff:resize(N, C, H - 1, W - 1)
+  self.x_diff:copy(input[{{}, {}, {1, -2}, {1, -2}}])
+  self.x_diff:add(-1, input[{{}, {}, {1, -2}, {2, -1}}])
+  self.y_diff:copy(input[{{}, {}, {1, -2}, {1, -2}}])
+  self.y_diff:add(-1, input[{{}, {}, {2, -1}, {1, -2}}])
+  self.gradInput[{{}, {}, {1, -2}, {1, -2}}]:add(self.x_diff):add(self.y_diff)
+  self.gradInput[{{}, {}, {1, -2}, {2, -1}}]:add(-1, self.x_diff)
+  self.gradInput[{{}, {}, {2, -1}, {1, -2}}]:add(-1, self.y_diff)
 
   self.gradInput:mul(self.strength)
   self.gradInput:add(gradOutput)
